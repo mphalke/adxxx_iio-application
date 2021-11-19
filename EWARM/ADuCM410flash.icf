@@ -1,0 +1,149 @@
+/*###ICF### Section handled by ICF editor, don't touch! ****/
+/*-Editor annotation file-*/
+/* IcfEditorFile="$TOOLKIT_DIR$\config\ide\IcfEditor\cortex_v1_0.xml" */
+
+/*-Specials-*/
+define symbol __ICFEDIT_intvec_start__ = 0x00000000;
+/*-Memory Regions-*/
+define symbol __ICFEDIT_region_ROM_start__ = 0x00000000;
+define symbol __ICFEDIT_region_ROM_end__   = 0x000FFFFF;
+define symbol __ICFEDIT_region_RAM_start__ = 0x20000000;
+define symbol __ICFEDIT_region_RAM_end__   = 0x20007FFF;
+
+/*-Sizes-*/
+define symbol __ICFEDIT_size_cstack__ = 8K;
+define symbol __ICFEDIT_size_heap__   = 64K;
+
+/**** End of ICF editor section. ###ICF###*/
+
+define memory mem with size        = 4G;
+
+define symbol FLASH_PAGE_SIZE                     = 8K;          // 8k flash page size
+
+// user-selectable SRAM mode
+define symbol USER_SRAM_MODE = 0;  
+//define symbol USER_SRAM_MODE = 1;
+//define symbol USER_SRAM_MODE = 2;
+//define symbol USER_SRAM_MODE = 3;
+
+// RAM bank sizes sizes are invariant... locations vary by RAM Mode#
+define symbol RAM_CACHE_SIZE  = 8K;
+define symbol RAM_BANK0_SIZE   = 32K;
+define symbol RAM_BANK1_SIZE   = 32K;
+define symbol RAM_BANK2_SIZE   = 64K;
+
+//MODE0  
+//8kB CACHE, 
+//32KB ISRAM,
+//96K DRAM,
+if(USER_SRAM_MODE == 0)
+{
+   // ISRAM
+    define symbol IRAM_START = 0x10000000;
+	// DRAM1
+   //define symbol DRAM1_START = 0x20018000;
+
+   define region iRAM  = mem:[from IRAM_START size (RAM_BANK0_SIZE)];
+   define region dRAM = mem:[from __ICFEDIT_region_RAM_start__ size (RAM_BANK1_SIZE+RAM_BANK2_SIZE)];
+}
+
+//MODE1     
+//0kB CACHE, 
+//40kB ISRAM,           
+//96K DRAM,             
+if(USER_SRAM_MODE == 1)
+{
+    // ISRAM
+    define symbol IRAM_START = 0x10000000;
+    // DRAM1
+    //define symbol DRAM1_START = 0x20018000;
+
+    define region iRAM  = mem:[from IRAM_START size (RAM_CACHE_SIZE+RAM_BANK0_SIZE)];
+    define region dRAM = mem:[from __ICFEDIT_region_RAM_start__ size (RAM_BANK1_SIZE+RAM_BANK2_SIZE)];
+    
+}
+
+//MODE2                                                                  
+//8kB CACHE,             
+//0KB ISRAM,            
+//128K DRAM,
+if(USER_SRAM_MODE == 2)
+{
+    // ISRAM
+    define symbol IRAM_START = 0x10000000;
+	// DRAM1
+   //define symbol DRAM1_START = 0x20018000;
+
+    define region iRAM  = mem:[from IRAM_START size 0];
+	 define region dRAM  = mem:[from __ICFEDIT_region_RAM_start__ size (RAM_BANK0_SIZE+RAM_BANK1_SIZE+RAM_BANK2_SIZE)];
+}
+
+//MODE3                                                                 
+//0kB CACHE, 
+//0KB ISRAM,
+//136K DRAM,
+if(USER_SRAM_MODE == 3)
+{
+   // ISRAM
+    define symbol IRAM_START = 0x10000000;
+	// DRAM1
+   //define symbol DRAM1_START = 0x20018000;
+
+    define region iRAM  = mem:[from IRAM_START size 0];
+	define region dRAM  = mem:[from __ICFEDIT_region_RAM_start__ size (RAM_CACHE_SIZE+RAM_BANK0_SIZE+RAM_BANK1_SIZE+RAM_BANK2_SIZE)];
+}
+
+// ROM regions
+define region ROM_REGION                    = mem:[from __ICFEDIT_region_ROM_start__ to __ICFEDIT_region_ROM_end__];
+define region VCTOR_REGION                    = mem:[from __ICFEDIT_intvec_start__ size 0x240];
+
+// C-Runtime blocks
+define block CSTACK with alignment = 8, size = __ICFEDIT_size_cstack__ { };
+define block HEAP   with alignment = 8, size = __ICFEDIT_size_heap__   { };
+
+
+// Flash Page0 contains an optional checksum block, as verified by the boot kernel at startup.
+// If generating a checksum ("Checksum" linker dialogue box) during the build, it is also
+// required to add "--keep __checksum" to the linker "Extra Options" dialogue to preserve the
+// linker-generated "__checksum" symbol.
+define block CHECKSUM      with alignment = 4, size = 4 { ro section .PAGE0_CHECKSUM };
+
+// force manditory placement of the CHECKSUM block within Page0
+place at address 0x00001FFC { block CHECKSUM };
+
+
+// KEEP these blocks, avoiding linker elimination...
+keep {
+    block CHECKSUM,
+};
+
+
+// initializations...
+do not initialize                                { section .noinit };
+
+// expand encoded initialized data variables from flash image into RAM during C-Runtime Startup
+initialize by copy                               { rw };
+
+//initialize by copy with packing = none         { section __DLIB_PERTHREAD }; // Required in a multi-threaded application
+
+// ROM: place IVT at start of flash, page zero (ahead of the "meta-data")
+place at start of VCTOR_REGION               { ro section .intvec };
+
+// ROM: place remaining read-only code/data in flash, starting at flash page1
+place in          ROM_REGION                     { ro };
+
+// place data and stack in lower, always-retained DSRAM region
+place in          dRAM    { rw };
+place at end of   dRAM    { block CSTACK };
+
+
+// place heap in upper DSRAM region
+place in          dRAM    { block HEAP };
+
+// ISRAM section for placing code in SRAM
+place in          iRAM     { section ISRAM_REGION, section .textrw };
+
+//region of dRAM0
+place in          dRAM    {section DRAM1_REGION};
+
+initialize by copy { section ISRAM_REGION };
