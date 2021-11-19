@@ -1,4 +1,3 @@
-This is a git-bitbucket  synch commit..
 -----
 Evaluation Boards/Products Supported
 ------------------------------------ 
